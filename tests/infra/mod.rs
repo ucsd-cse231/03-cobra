@@ -5,25 +5,62 @@ use std::{
 
 #[macro_export]
 macro_rules! success_tests {
-    ($($name:ident: $expected:literal),* $(,)?) => {
+    ($({
+        name: $name:ident,
+        $(input: $input:literal,)?
+        expected: $expected:literal $(,)?
+       }),*
+       $(,)?
+    ) => {
         $(
         #[test]
         fn $name() {
-            $crate::infra::run_success_test(stringify!($name), $expected);
+            #[allow(unused_assignments)]
+            let mut input = None;
+            $(input = Some($input))?;
+            $crate::infra::run_success_test(stringify!($name), $expected, input);
         }
         )*
-    }
+    };
 }
+
 #[macro_export]
-macro_rules! failure_tests {
-    ($($name:ident: $expected:literal),* $(,)?) => {
+macro_rules! runtime_error_tests {
+    ($({
+        name: $name:ident,
+        $(input: $input:literal,)?
+        expected: $expected:literal $(,)?
+       }),*
+       $(,)?
+    ) => {
         $(
         #[test]
         fn $name() {
-            $crate::infra::run_failure_test(stringify!($name), $expected);
+            #[allow(unused_assignments)]
+            let mut input = None;
+            $(input = Some($input))?;
+            $crate::infra::run_runtime_error_test(stringify!($name), $expected, input);
         }
         )*
-    }
+    };
+}
+
+#[macro_export]
+macro_rules! compiler_error_tests {
+    ($({
+        name: $name:ident,
+        $(input: $input:literal,)?
+        expected: $expected:literal $(,)?
+       }),*
+       $(,)?
+    ) => {
+        $(
+        #[test]
+        fn $name() {
+            $crate::infra::run_compiler_error_test(stringify!($name), $expected);
+        }
+        )*
+    };
 }
 
 fn compile(name: &str) -> Result<(), String> {
@@ -48,33 +85,57 @@ fn compile(name: &str) -> Result<(), String> {
     Ok(())
 }
 
-pub(crate) fn run_success_test(name: &str, expected: &str) {
+pub(crate) fn run_success_test(name: &str, expected: &str, input: Option<&str>) {
     if let Err(err) = compile(name) {
-        panic!(
-            "expected a successful compilation, but got an error: `{}`",
-            err
-        );
+        panic!("expected a successful compilation, but got an error: `{err}`");
     }
+    match run(name, input) {
+        Err(err) => {
+            panic!("expected a successful execution, but got an error: `{err}`");
+        }
+        Ok(actual_output) => {
+            diff(expected, actual_output);
+        }
+    }
+}
 
-    let output = Command::new(&mk_path(name, Ext::Run)).output().unwrap();
-    assert!(
-        output.status.success(),
-        "unexpected error when running the compiled program: `{}`",
-        std::str::from_utf8(&output.stderr).unwrap(),
-    );
-    let actual_output = String::from_utf8(output.stdout).unwrap();
-    let actual_output = actual_output.trim();
+fn diff(expected: &str, actual_output: String) {
     let expected_output = expected.trim();
     if expected_output != actual_output {
         eprintln!(
             "output differed!\n{}",
-            prettydiff::diff_lines(actual_output, expected_output)
+            prettydiff::diff_lines(&actual_output, expected_output)
         );
         panic!("test failed");
     }
 }
 
-pub(crate) fn run_failure_test(name: &str, expected: &str) {
+pub(crate) fn run(name: &str, input: Option<&str>) -> Result<String, String> {
+    let mut cmd = Command::new(&mk_path(name, Ext::Run));
+    if let Some(input) = input {
+        cmd.arg(input);
+    }
+    let output = cmd.output().unwrap();
+    if output.status.success() {
+        Ok(String::from_utf8(output.stdout).unwrap().trim().to_string())
+    } else {
+        Err(String::from_utf8(output.stderr).unwrap().trim().to_string())
+    }
+}
+
+pub(crate) fn run_runtime_error_test(name: &str, expected: &str, input: Option<&str>) {
+    if let Err(err) = compile(name) {
+        panic!("expected a successful compilation, but got an error: `{err}`");
+    }
+    match run(name, input) {
+        Ok(out) => {
+            panic!("expected a runtime error, but program executed succesfully: `{out}`");
+        }
+        Err(err) => diff(expected, err),
+    }
+}
+
+pub(crate) fn run_compiler_error_test(name: &str, expected: &str) {
     let Err(actual_err) = compile(name) else {
         panic!("expected a failure, but compilation succeeded");
     };
