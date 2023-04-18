@@ -65,8 +65,8 @@ macro_rules! compiler_error_tests {
 
 fn compile(name: &str) -> Result<(), String> {
     // Run the compiler
-    let boa: PathBuf = ["target", "debug", "boa"].iter().collect();
-    let output = Command::new(&boa)
+    let compiler: PathBuf = ["target", "debug", env!("CARGO_PKG_NAME")].iter().collect();
+    let output = Command::new(&compiler)
         .arg(&mk_path(name, Ext::Snek))
         .arg(&mk_path(name, Ext::Asm))
         .output()
