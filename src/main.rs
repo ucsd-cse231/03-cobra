@@ -14,7 +14,7 @@ fn main() -> std::io::Result<()> {
     let asm_program = format!(
         "
 section .text
-extern print_error
+extern snek_error
 global our_code_starts_here
 our_code_starts_here:
   {}

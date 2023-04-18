@@ -9,11 +9,11 @@ extern "C" {
     fn our_code_starts_here(input: u64) -> u64;
 }
 
-#[export_name = "\x01print_error"]
-pub extern "C" fn print_error(code: i64) {
+#[export_name = "\x01snek_error"]
+pub extern "C" fn snek_error(errcode: i64) {
     // TODO: print error message according to writeup
-    println!("error code {code}");
-    std::process::abort();
+    eprintln!("an error ocurred {errcode}");
+    std::process::exit(1);
 }
 
 fn parse_input(input: &str) -> u64 {
