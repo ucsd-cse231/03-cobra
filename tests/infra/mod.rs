@@ -131,16 +131,20 @@ pub(crate) fn run_runtime_error_test(name: &str, expected: &str, input: Option<&
         Ok(out) => {
             panic!("expected a runtime error, but program executed succesfully: `{out}`");
         }
-        Err(err) => diff(expected, err),
+        Err(err) => check_error_msg(&err, expected),
     }
 }
 
 pub(crate) fn run_compiler_error_test(name: &str, expected: &str) {
-    let Err(actual_err) = compile(name) else {
-        panic!("expected a failure, but compilation succeeded");
-    };
+    match compile(name) {
+        Ok(()) => panic!("expected a failure, but compilation succeeded"),
+        Err(err) => check_error_msg(&err, expected),
+    }
+}
+
+fn check_error_msg(found: &str, expected: &str) {
     assert!(
-        actual_err.contains(expected.trim()),
+        found.contains(expected.trim()),
         "the reported error message does not match",
     );
 }
