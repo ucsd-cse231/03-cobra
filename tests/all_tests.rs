@@ -39,6 +39,6 @@ static_error_tests! {
     {
         name: number_bounds_fail,
         file: "number_bounds_fail.snek",
-        expected: "invalid",
+        expected: "Invalid",
     }
 }
