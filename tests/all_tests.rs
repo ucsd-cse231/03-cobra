@@ -7,12 +7,17 @@ success_tests! {
         file: "false_val.snek",
         expected: "false",
     },
-
     {
-        name: input_compare,
+        name: input_compare_1,
         file: "input_compare.snek",
         input: "2",
         expected: "false",
+    },
+    {
+        name: input_compare_2,
+        file: "input_compare.snek",
+        input: "10",
+        expected: "true",
     },
 }
 
