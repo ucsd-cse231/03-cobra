@@ -45,22 +45,29 @@ macro_rules! tests {
                 let mut input = None;
                 $(input = Some($input);)?
                 let kind = $crate::infra::TestKind::$kind;
-                $crate::infra::run_test($file, input, $expected, kind);
+                $crate::infra::run_test(stringify!($name), $file, input, $expected, kind);
             }
         )*
     };
 }
 
-pub(crate) fn run_test(name: &str, input: Option<&str>, expected: &str, kind: TestKind) {
+pub(crate) fn run_test(
+    name: &str,
+    file: &str,
+    input: Option<&str>,
+    expected: &str,
+    kind: TestKind,
+) {
+    let file = Path::new("tests").join(file);
     match kind {
-        TestKind::Success => run_success_test(name, expected, input),
-        TestKind::RuntimeError => run_runtime_error_test(name, expected, input),
-        TestKind::StaticError => run_static_error_test(name, expected),
+        TestKind::Success => run_success_test(name, &file, expected, input),
+        TestKind::RuntimeError => run_runtime_error_test(name, &file, expected, input),
+        TestKind::StaticError => run_static_error_test(name, &file, expected),
     }
 }
 
-fn run_success_test(name: &str, expected: &str, input: Option<&str>) {
-    if let Err(err) = compile(name) {
+fn run_success_test(name: &str, file: &Path, expected: &str, input: Option<&str>) {
+    if let Err(err) = compile(name, file) {
         panic!("expected a successful compilation, but got an error: `{err}`");
     }
     match run(name, input) {
@@ -73,8 +80,8 @@ fn run_success_test(name: &str, expected: &str, input: Option<&str>) {
     }
 }
 
-fn run_runtime_error_test(name: &str, expected: &str, input: Option<&str>) {
-    if let Err(err) = compile(name) {
+fn run_runtime_error_test(name: &str, file: &Path, expected: &str, input: Option<&str>) {
+    if let Err(err) = compile(name, file) {
         panic!("expected a successful compilation, but got an error: `{err}`");
     }
     match run(name, input) {
@@ -85,18 +92,18 @@ fn run_runtime_error_test(name: &str, expected: &str, input: Option<&str>) {
     }
 }
 
-fn run_static_error_test(name: &str, expected: &str) {
-    match compile(name) {
+fn run_static_error_test(name: &str, file: &Path, expected: &str) {
+    match compile(name, file) {
         Ok(()) => panic!("expected a failure, but compilation succeeded"),
         Err(err) => check_error_msg(&err, expected),
     }
 }
 
-fn compile(name: &str) -> Result<(), String> {
+fn compile(name: &str, file: &Path) -> Result<(), String> {
     // Run the compiler
     let compiler: PathBuf = ["target", "debug", env!("CARGO_PKG_NAME")].iter().collect();
     let output = Command::new(&compiler)
-        .arg(&mk_path(name, Ext::Snek))
+        .arg(file)
         .arg(&mk_path(name, Ext::Asm))
         .output()
         .expect("could not run the compiler");
@@ -151,7 +158,6 @@ fn mk_path(name: &str, ext: Ext) -> PathBuf {
 
 #[derive(Copy, Clone)]
 enum Ext {
-    Snek,
     Asm,
     Run,
 }
@@ -159,7 +165,6 @@ enum Ext {
 impl std::fmt::Display for Ext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Ext::Snek => write!(f, "snek"),
             Ext::Asm => write!(f, "s"),
             Ext::Run => write!(f, "run"),
         }
