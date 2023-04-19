@@ -4,11 +4,13 @@ mod infra;
 success_tests! {
     {
         name: false_val,
+        file: "false_val.snek",
         expected: "false",
     },
 
     {
         name: input_compare,
+        file: "input_compare.snek",
         input: "2",
         expected: "false",
     },
@@ -17,6 +19,7 @@ success_tests! {
 runtime_error_tests! {
     {
         name: invalid_argument,
+        file: "invalid_argument.snek",
         expected: "invalid argument",
     },
 }
@@ -24,6 +27,7 @@ runtime_error_tests! {
 static_error_tests! {
     {
         name: number_bounds_fail,
+        file: "number_bounds_fail.snek",
         expected: "invalid",
     }
 }

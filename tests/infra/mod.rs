@@ -30,8 +30,10 @@ macro_rules! tests {
         $(
             {
                 name: $name:ident,
+                file: $file:literal,
                 $(input: $input:literal,)?
                 expected: $expected:literal $(,)?
+                $(" $(tt:$tt)* ")?
             }
         ),*
         $(,)?
@@ -43,7 +45,7 @@ macro_rules! tests {
                 let mut input = None;
                 $(input = Some($input);)?
                 let kind = $crate::infra::TestKind::$kind;
-                $crate::infra::run_test(stringify!($name), input, $expected, kind);
+                $crate::infra::run_test($file, input, $expected, kind);
             }
         )*
     };
