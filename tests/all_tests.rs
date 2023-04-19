@@ -27,6 +27,12 @@ runtime_error_tests! {
         file: "invalid_argument.snek",
         expected: "invalid argument",
     },
+    {
+        name: input_compare_3,
+        file: "input_compare.snek",
+        input: "true",
+        expected: "invalid argument",
+    },
 }
 
 static_error_tests! {
