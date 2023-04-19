@@ -17,8 +17,7 @@ runtime_error_tests! {
     }
 }
 
-compiler_error_tests! {
-
+static_error_tests! {
     {
         name: test_name3,
         expected: "output",

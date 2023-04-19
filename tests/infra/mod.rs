@@ -3,64 +3,91 @@ use std::{
     process::Command,
 };
 
+pub(crate) enum TestKind {
+    Success,
+    RuntimeError,
+    StaticError,
+}
+
 #[macro_export]
 macro_rules! success_tests {
-    ($({
-        name: $name:ident,
-        $(input: $input:literal,)?
-        expected: $expected:literal $(,)?
-       }),*
-       $(,)?
-    ) => {
-        $(
-        #[test]
-        fn $name() {
-            #[allow(unused_assignments)]
-            let mut input = None;
-            $(input = Some($input))?;
-            $crate::infra::run_success_test(stringify!($name), $expected, input);
-        }
-        )*
-    };
+    ($($tt:tt)*) => { $crate::tests!(Success => $($tt)*); }
 }
 
 #[macro_export]
 macro_rules! runtime_error_tests {
-    ($({
-        name: $name:ident,
-        $(input: $input:literal,)?
-        expected: $expected:literal $(,)?
-       }),*
-       $(,)?
+    ($($tt:tt)*) => { $crate::tests!(RuntimeError => $($tt)*); }
+}
+
+#[macro_export]
+macro_rules! static_error_tests {
+    ($($tt:tt)*) => { $crate::tests!(StaticError => $($tt)*); }
+}
+
+#[macro_export]
+macro_rules! tests {
+    ($kind:ident =>
+        $(
+            {
+                name: $name:ident,
+                $(input: $input:literal,)?
+                expected: $expected:literal $(,)?
+            }
+        ),*
+        $(,)?
     ) => {
         $(
-        #[test]
-        fn $name() {
-            #[allow(unused_assignments)]
-            let mut input = None;
-            $(input = Some($input))?;
-            $crate::infra::run_runtime_error_test(stringify!($name), $expected, input);
-        }
+            #[test]
+            fn $name() {
+                #[allow(unused_assignments, unused_mut)]
+                let mut input = None;
+                $(input = Some($input);)?
+                let kind = $crate::infra::TestKind::$kind;
+                $crate::infra::run_test(stringify!($name), input, $expected, kind);
+            }
         )*
     };
 }
 
-#[macro_export]
-macro_rules! compiler_error_tests {
-    ($({
-        name: $name:ident,
-        $(input: $input:literal,)?
-        expected: $expected:literal $(,)?
-       }),*
-       $(,)?
-    ) => {
-        $(
-        #[test]
-        fn $name() {
-            $crate::infra::run_compiler_error_test(stringify!($name), $expected);
+pub(crate) fn run_test(name: &str, input: Option<&str>, expected: &str, kind: TestKind) {
+    match kind {
+        TestKind::Success => run_success_test(name, expected, input),
+        TestKind::RuntimeError => run_runtime_error_test(name, expected, input),
+        TestKind::StaticError => run_static_error_test(name, expected),
+    }
+}
+
+fn run_success_test(name: &str, expected: &str, input: Option<&str>) {
+    if let Err(err) = compile(name) {
+        panic!("expected a successful compilation, but got an error: `{err}`");
+    }
+    match run(name, input) {
+        Err(err) => {
+            panic!("expected a successful execution, but got an error: `{err}`");
         }
-        )*
-    };
+        Ok(actual_output) => {
+            diff(expected, actual_output);
+        }
+    }
+}
+
+fn run_runtime_error_test(name: &str, expected: &str, input: Option<&str>) {
+    if let Err(err) = compile(name) {
+        panic!("expected a successful compilation, but got an error: `{err}`");
+    }
+    match run(name, input) {
+        Ok(out) => {
+            panic!("expected a runtime error, but program executed succesfully: `{out}`");
+        }
+        Err(err) => check_error_msg(&err, expected),
+    }
+}
+
+fn run_static_error_test(name: &str, expected: &str) {
+    match compile(name) {
+        Ok(()) => panic!("expected a failure, but compilation succeeded"),
+        Err(err) => check_error_msg(&err, expected),
+    }
 }
 
 fn compile(name: &str) -> Result<(), String> {
@@ -85,32 +112,7 @@ fn compile(name: &str) -> Result<(), String> {
     Ok(())
 }
 
-pub(crate) fn run_success_test(name: &str, expected: &str, input: Option<&str>) {
-    if let Err(err) = compile(name) {
-        panic!("expected a successful compilation, but got an error: `{err}`");
-    }
-    match run(name, input) {
-        Err(err) => {
-            panic!("expected a successful execution, but got an error: `{err}`");
-        }
-        Ok(actual_output) => {
-            diff(expected, actual_output);
-        }
-    }
-}
-
-fn diff(expected: &str, actual_output: String) {
-    let expected_output = expected.trim();
-    if expected_output != actual_output {
-        eprintln!(
-            "output differed!\n{}",
-            prettydiff::diff_lines(&actual_output, expected_output)
-        );
-        panic!("test failed");
-    }
-}
-
-pub(crate) fn run(name: &str, input: Option<&str>) -> Result<String, String> {
+fn run(name: &str, input: Option<&str>) -> Result<String, String> {
     let mut cmd = Command::new(&mk_path(name, Ext::Run));
     if let Some(input) = input {
         cmd.arg(input);
@@ -123,30 +125,22 @@ pub(crate) fn run(name: &str, input: Option<&str>) -> Result<String, String> {
     }
 }
 
-pub(crate) fn run_runtime_error_test(name: &str, expected: &str, input: Option<&str>) {
-    if let Err(err) = compile(name) {
-        panic!("expected a successful compilation, but got an error: `{err}`");
-    }
-    match run(name, input) {
-        Ok(out) => {
-            panic!("expected a runtime error, but program executed succesfully: `{out}`");
-        }
-        Err(err) => check_error_msg(&err, expected),
-    }
-}
-
-pub(crate) fn run_compiler_error_test(name: &str, expected: &str) {
-    match compile(name) {
-        Ok(()) => panic!("expected a failure, but compilation succeeded"),
-        Err(err) => check_error_msg(&err, expected),
-    }
-}
-
 fn check_error_msg(found: &str, expected: &str) {
     assert!(
         found.contains(expected.trim()),
         "the reported error message does not match",
     );
+}
+
+fn diff(expected: &str, actual_output: String) {
+    let expected_output = expected.trim();
+    if expected_output != actual_output {
+        eprintln!(
+            "output differed!\n{}",
+            prettydiff::diff_lines(&actual_output, expected_output)
+        );
+        panic!("test failed");
+    }
 }
 
 fn mk_path(name: &str, ext: Ext) -> PathBuf {
